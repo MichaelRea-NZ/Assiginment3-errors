@@ -1,6 +1,7 @@
 import sys
 import os
 import re
+import pickle
 from cmd import Cmd
 from PIL import Image
 from abc import ABCMeta, abstractmethod
@@ -10,14 +11,13 @@ class GilliamPrompt(Cmd):
     doc_header = "Here are the list of commands in help.\n To get help on a " \
                  "command, enter 'help' followed by command name'."
 
-    def __init__(self, diagram_painter, view_image, prep_file, analyze_file,file_content):
+    def __init__(self, diagram_painter, view_image, prep_file, analyze_file):
         Cmd.__init__(self)
         #self.js_file_content = ""
         self.arg = ""
         self.diagram = diagram_painter
         self.view = view_image
         self.prep = prep_file
-        self.js_file = file_content
         self.analyze = analyze_file
 
 
@@ -47,11 +47,12 @@ class GilliamPrompt(Cmd):
         self.prep.select_file(arg)
         self.prep.open_file(arg)
 
-    def do_analyse(self, js_file):
+    def do_analyse(self, arg):
         """Enter 'analyzer' to analysis the selected file."""
-        self.analyze.find_class(js_file)
-        self.analyze.find_property(js_file)
-        self.analyze.find_function_1(js_file)
+        analyze = Analyzer(self.js_file_content)
+        analyze.find_class()
+        analyze.find_property()
+        analyze.find_function_1()
 
     def do_draw(self, arg):
         """Enter 'draw' to draw the selected file."""
@@ -61,15 +62,15 @@ class GilliamPrompt(Cmd):
         """Enter 'display' to view the drawing."""
         self.view.display(self)
 
-    """def do_pickle(self, arg):
-        Enter 'pickle' to save as a pickle file.
-       # pickler = Pickles(self.js_file_content)
-       # pickler.create_pickle()"""
+    def do_pickle(self, arg):
+        """Enter 'pickle' to save as a pickle file."""
+        pickler = Pickles(self.js_file_content)
+        pickler.create_pickle()
 
-    """def do_open_pickle(self, arg):
-        Enter 'open_pickle' to open the pickle file
+    def do_open_pickle(self, arg):
+        """Enter 'open_pickle' to open the pickle file"""
         #pickler = Pickles(self.js_file_content)
-        #pickler.open_pickle()"""
+        #pickler.open_pickle()
 
     def do_shut(self, args):
         """ Enter 'shut y' To leave the program."""
@@ -112,6 +113,9 @@ class Preparer(AbstractPreparer):
 
 
 class AbstractAnalyzer(metaclass=ABCMeta):
+    def __init__(self, file_content):
+        pass
+
     @abstractmethod
     def find_class(self, js_file):
         pass
@@ -127,10 +131,17 @@ class AbstractAnalyzer(metaclass=ABCMeta):
 
 class Analyzer(AbstractAnalyzer):
 
+    def __init__(self, file_content):
+        super().__init__(file_content)
+        self.js_file = file_content
+        self.class_name = ""
+        self.property_name = ""
+        self.function_name = ""
+
     def find_class(self, js_file):
         try:
-            self.class_name = re.search(r'class.(\w+)', self.js_file)
-            if self.js_file == '':
+            self.class_name = re.search(r'class.(\w+)', js_file)
+            if js_file == '':
                 raise Exception
         except Exception as e:
             print('A JS file needs to be selected to run the analyzer')
@@ -144,8 +155,8 @@ class Analyzer(AbstractAnalyzer):
 
     def find_property(self, js_file):
         try:
-            self.property_name = re.findall(r'this.(\w+)', self.js_file)
-            if self.js_file == '':
+            self.property_name = re.findall(r'this.(\w+)', js_file)
+            if js_file == '':
                 raise Exception
         except Exception as e:
             print('A JS file needs to be selected to run the analyzer')
@@ -165,8 +176,8 @@ class Analyzer(AbstractAnalyzer):
 
     def find_function_1(self, js_file):
         try:
-            self.function_name = re.findall(r'function.(\w+)', self.js_file)
-            if self.js_file == '':
+            self.function_name = re.findall(r'function.(\w+)', js_file)
+            if js_file == '':
                 raise Exception
         except Exception as e:
             print('A JS file needs to be selected to run the analyzer')
@@ -182,7 +193,7 @@ class Analyzer(AbstractAnalyzer):
         return self.function_name
 
     def get_no_file(self, js_file):
-        if self.js_file == '':
+        if js_file == '':
             return 'A JS file needs to be selected to run the analyzer'
 
 
@@ -190,11 +201,28 @@ class Analyzer(AbstractAnalyzer):
 
 class AbstractDrawer(metaclass=ABCMeta):
     @abstractmethod
+    def create_file(self):
+        pass
+
+    @abstractmethod
     def draw(self, arg):
         pass
 
 
 class Drawer(AbstractDrawer):
+    def create_file(self):
+        self.dot_file1 = open("classfile.dot", "w")
+        self.dot_file1.write(f'digraph G {{fontname = "Bitstream Vera Sans"\
+    fontsize = 8 node [fontname = "Bitstream Vera Sans"\
+    fontsize = 8 shape = "record"]\
+    edge [fontname = "Bitstream Vera Sans"fontsize = 8] {self.class_name}\
+    [ label = " {{{self.class_name}|{self.property_name}|{self.function_name}\
+    }}"]}}')
+        self.dot_file1.close()
+        self.dot_file1 = open("classfile.dot", "r")
+        print(self.dot_file1.read())
+        self.dot_file1.close()
+
     def draw(self, arg):
         os.system("Graphviz\\bin\\dot.exe  -Tpng -O classfile.dot")
         print("Drawing UML diagram")
@@ -211,17 +239,33 @@ class Display(AbstractDisplay):
         view = Image.open('classfile.dot.png')
         view.show()
 
+class Pickles:
+
+    def __init__(self, pickle_file):
+        self.file_name = pickle_file
+
+    def create_pickle(self):
+        file = open('pickle_file.pickle', 'wb')
+        pickle.dump(self.file_name, file)
+        file.close()
+        print('file pickled')
+
+    def open_pickle(self):
+        self.file_name = pickle.load(open('pickle_file.pickle', 'rb'))
+        print('file opened')
+        print(self.file_name)
+
 
 if __name__ == '__main__':
-    prompt = GilliamPrompt(Drawer(), Display(), Preparer(), Analyzer(), file_content)
+    prompt = GilliamPrompt(Drawer(), Display(), Preparer(), Analyzer())
     prompt.prompt = '>->-> '
     prompt.cmdloop('\nWelcome to Gilliam the JS class diagram drawer.\
                         \nType help or ? for a list of commands')
-    uml_image = GilliamPrompt(Drawer())
+    uml_image = GilliamPrompt(Drawer(), Display(), Preparer(), Analyzer())
     uml_image.do_draw()
-    show_image = GilliamPrompt(Display())
+    show_image = GilliamPrompt(Drawer(), Display(), Preparer(), Analyzer())
     show_image.do_display()
-    file_preper = GilliamPrompt(Preparer())
+    file_preper = GilliamPrompt(Drawer(), Display(), Preparer(), Analyzer())
     file_preper.do_select_file()
-    class_analyser = GilliamPrompt(Analyzer())
+    class_analyser = GilliamPrompt(Drawer(), Display(), Preparer(), Analyzer())
     class_analyser.do_analyse()
